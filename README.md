@@ -65,18 +65,50 @@
             animation: pulse-red 2s infinite;
             border: 1px solid #ef4444;
         }
+        /* Auth Overlay */
+        #authOverlay {
+            background-image: linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url('https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=2000');
+            background-size: cover;
+            background-position: center;
+        }
     </style>
 </head>
 <body class="p-4 md:p-8">
 
-    <div class="max-w-7xl mx-auto">
+    <!-- ÉCRAN DE CONNEXION -->
+    <div id="authOverlay" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-8 border-green-700">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-black italic tracking-tighter uppercase text-green-800">Logi-Gabon</h1>
+                <p class="text-gray-500 text-sm">Accès sécurisé - Administration</p>
+            </div>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Email professionnel</label>
+                    <input type="email" id="loginEmail" required class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-green-500" placeholder="admin@logigabon.ga">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-400 mb-1">Mot de passe</label>
+                    <input type="password" id="loginPassword" required class="w-full p-3 border rounded-xl outline-none focus:ring-2 focus:ring-green-500" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full btn-primary text-white font-bold py-4 rounded-xl shadow-lg uppercase tracking-widest mt-4">Se Connecter</button>
+            </form>
+            <div id="loginError" class="mt-4 text-center text-red-500 text-xs font-bold hidden"></div>
+        </div>
+    </div>
+
+    <!-- APPLICATION PRINCIPALE (Masquée par défaut) -->
+    <div id="appContent" class="hidden max-w-7xl mx-auto">
         <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-green-800 p-6 rounded-xl text-white shadow-lg">
             <div>
                 <h1 class="text-3xl font-bold italic tracking-tighter uppercase">Logi-Gabon</h1>
                 <p class="opacity-90 text-sm font-medium">Gestion Transit & Suivi des Dépenses - Libreville / Owendo</p>
             </div>
-            <div id="clock" class="text-lg font-mono mt-4 md:mt-0 bg-green-900 px-4 py-1 rounded-full"></div>
+            <div class="flex items-center gap-4 mt-4 md:mt-0">
+                <div id="clock" class="text-lg font-mono bg-green-900 px-4 py-1 rounded-full"></div>
+                <button onclick="logout()" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-xs font-bold uppercase transition-colors">Quitter</button>
+            </div>
         </header>
 
         <!-- DASHBOARD COMPTABILITÉ -->
@@ -104,7 +136,7 @@
             <!-- Formulaire de Saisie / Modification -->
             <section class="card p-6 lg:col-span-2 relative">
                 <div id="editModeIndicator" class="hidden absolute top-4 right-6 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold animate-pulse uppercase">
-                    Mode Édition : <span id="editingId"></span>
+                    Mode Édition
                 </div>
                 
                 <h2 id="formTitle" class="text-xl font-bold mb-6 border-b pb-2 flex items-center text-gray-800">
@@ -297,7 +329,7 @@
     </div>
 
     <!-- Modal Visionneuse Galerie -->
-    <div id="galleryModal" class="fixed inset-0 bg-black bg-opacity-95 hidden z-50 flex flex-col items-center justify-center p-4">
+    <div id="galleryModal" class="fixed inset-0 bg-black bg-opacity-95 hidden z-[110] flex flex-col items-center justify-center p-4">
         <button onclick="closeGallery()" class="absolute top-6 right-6 text-white text-4xl font-bold hover:text-red-500 transition-colors">&times;</button>
         <div class="relative w-full max-w-4xl flex items-center justify-center">
             <button onclick="prevImg()" class="absolute left-0 md:-left-20 bg-white bg-opacity-20 hover:bg-opacity-40 text-white p-4 rounded-full transition-all">❮</button>
@@ -307,16 +339,36 @@
         <p id="imgCounter" class="text-white mt-6 font-mono text-sm bg-gray-800 px-4 py-1 rounded-full"></p>
     </div>
 
-    <script>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, onSnapshot, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'logigabon-default';
+
+        // Constantes
         const DOSSIER_FEE = 65000;
+
+        // État Global
+        let currentUser = null;
         let currentTab = 'active';
-        let history = JSON.parse(localStorage.getItem('logi_active_v9')) || [];
-        let archives = JSON.parse(localStorage.getItem('logi_archive_v9')) || [];
+        let historyData = [];
+        let archivesData = [];
         let tempImages = []; 
         let editingDossierId = null; 
         let currentGallery = [];
         let currentImgIdx = 0;
 
+        // DOM Elements
+        const authOverlay = document.getElementById('authOverlay');
+        const appContent = document.getElementById('appContent');
+        const loginForm = document.getElementById('loginForm');
+        const loginError = document.getElementById('loginError');
         const form = document.getElementById('logiForm');
         const fileInput = document.getElementById('docPhotos');
         const multiPreview = document.getElementById('multiPreviewContainer');
@@ -325,14 +377,78 @@
         const cancelBtn = document.getElementById('cancelBtn');
         const formTitle = document.getElementById('formTitle');
 
-        // Clock
+        // --- AUTHENTIFICATION ---
+
+        const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } catch (e) {
+                    // Fallback invisible
+                }
+            }
+        };
+        initAuth();
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                authOverlay.classList.add('hidden');
+                appContent.classList.remove('hidden');
+                setupFirestoreListeners(user.uid);
+            } else {
+                currentUser = null;
+                authOverlay.classList.remove('hidden');
+                appContent.classList.add('hidden');
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginError.classList.add('hidden');
+            const email = document.getElementById('loginEmail').value;
+            const pass = document.getElementById('loginPassword').value;
+
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+            } catch (error) {
+                loginError.innerText = "Accès refusé : Vérifiez vos identifiants.";
+                loginError.classList.remove('hidden');
+            }
+        });
+
+        window.logout = () => {
+            signOut(auth);
+        };
+
+        // --- FIRESTORE LOGIC ---
+
+        function setupFirestoreListeners(userId) {
+            const activeCol = collection(db, 'artifacts', appId, 'users', userId, 'active');
+            const archiveCol = collection(db, 'artifacts', appId, 'users', userId, 'archive');
+
+            // Listen to Active
+            onSnapshot(activeCol, (snapshot) => {
+                historyData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderHistory();
+            }, (err) => console.error("Error reading active", err));
+
+            // Listen to Archive
+            onSnapshot(archiveCol, (snapshot) => {
+                archivesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderHistory();
+            }, (err) => console.error("Error reading archive", err));
+        }
+
+        // --- APP LOGIC ---
+
         setInterval(() => document.getElementById('clock').innerText = new Date().toLocaleString('fr-FR'), 1000);
 
         function formatFCFA(num) {
             return new Intl.NumberFormat('fr-FR').format(Math.round(num));
         }
 
-        function updateCalculations() {
+        window.updateCalculations = () => {
             const l = parseFloat(document.getElementById('long').value) || 0;
             const w = parseFloat(document.getElementById('larg').value) || 0;
             const h = parseFloat(document.getElementById('haut').value) || 0;
@@ -348,7 +464,6 @@
             const margin = sell - totalCost;
             const marginPerc = sell > 0 ? (margin / sell) * 100 : 0;
 
-            // Update UI
             document.getElementById('resCBM').innerText = cbm.toFixed(3) + " m³";
             document.getElementById('resBuy').innerText = formatFCFA(buy) + " FCFA";
             document.getElementById('resShip').innerText = formatFCFA(ship) + " FCFA";
@@ -365,7 +480,6 @@
             marginEl.innerText = formatFCFA(margin) + " FCFA";
             percentEl.innerText = marginPerc.toFixed(1) + "% du prix de vente";
 
-            // Logic Avertissements & Solutions
             financeCard.classList.remove('alert-critical', 'border-orange-500');
             alertBadge.classList.add('hidden');
             adviceBox.classList.add('hidden');
@@ -377,35 +491,34 @@
                     alertBadge.innerText = "DANGER : Déficit";
                     alertBadge.className = "px-2 py-1 rounded text-[10px] font-black uppercase bg-red-600 text-white";
                     alertBadge.classList.remove('hidden');
-                    adviceBox.innerHTML = `⚠️ <strong>Solution :</strong> Vous perdez de l'argent. Augmentez le prix de vente à au moins <strong>${formatFCFA(totalCost * 1.15)} FCFA</strong> pour assurer 15% de marge.`;
+                    adviceBox.innerHTML = `⚠️ <strong>Solution :</strong> Déficit détecté. Revisez le prix à min. <strong>${formatFCFA(totalCost * 1.15)} FCFA</strong>.`;
                 } else if (marginPerc < 10) {
                     financeCard.classList.add('border-orange-500');
                     alertBadge.innerText = "ALERTE : Faible Marge";
                     alertBadge.className = "px-2 py-1 rounded text-[10px] font-black uppercase bg-orange-500 text-white";
                     alertBadge.classList.remove('hidden');
-                    adviceBox.innerHTML = `💡 <strong>Conseil :</strong> Votre rentabilité est faible (${marginPerc.toFixed(1)}%). Essayez de renégocier le fret ou d'ajuster le prix client.`;
+                    adviceBox.innerHTML = `💡 <strong>Conseil :</strong> Rentabilité faible (${marginPerc.toFixed(1)}%). Réajustez vos frais.`;
                 } else {
                     alertBadge.innerText = "SANTÉ : Excellente";
                     alertBadge.className = "px-2 py-1 rounded text-[10px] font-black uppercase bg-green-600 text-white";
                     alertBadge.classList.remove('hidden');
-                    adviceBox.innerHTML = `✅ <strong>Analyse :</strong> Ce dossier est sain. Rentabilité confirmée.`;
+                    adviceBox.innerHTML = `✅ <strong>Analyse :</strong> Marge opérationnelle valide.`;
                 }
             }
             
             return { cbm, tax, totalCost, margin, marginPerc, buy, ship, other, sell, dims: {l, w, h} };
         }
 
-        // Dashboard Stats
         function updateDashboard() {
-            const list = [...history, ...archives];
+            const list = [...historyData, ...archivesData];
             const totalCA = list.reduce((sum, item) => sum + (item.finance?.sell || 0), 0);
             const totalMarge = list.reduce((sum, item) => sum + (item.margin || 0), 0);
-            const avgRent = list.length > 0 ? (totalMarge / totalCA) * 100 : 0;
+            const avgRent = totalCA > 0 ? (totalMarge / totalCA) * 100 : 0;
 
             document.getElementById('statsCA').innerText = formatFCFA(totalCA) + " FCFA";
             document.getElementById('statsMarge').innerText = formatFCFA(totalMarge) + " FCFA";
             document.getElementById('statsMarge').className = `text-xl font-black ${totalMarge >= 0 ? 'text-green-700' : 'text-red-600'}`;
-            document.getElementById('statsRentabilite').innerText = (isNaN(avgRent) ? 0 : avgRent.toFixed(1)) + "%";
+            document.getElementById('statsRentabilite').innerText = avgRent.toFixed(1) + "%";
             document.getElementById('statsDossiers').innerText = list.length;
         }
 
@@ -431,20 +544,20 @@
             `).join('');
         }
 
-        function removeTempImg(idx) {
+        window.removeTempImg = (idx) => {
             tempImages.splice(idx, 1);
             renderTempPreviews();
-        }
+        };
 
-        function switchTab(tab) {
+        window.switchTab = (tab) => {
             currentTab = tab;
             document.getElementById('tabActive').className = tab === 'active' ? 'pb-2 tab-active transition-all' : 'pb-2 hover:text-white transition-all';
             document.getElementById('tabArchive').className = tab === 'archive' ? 'pb-2 tab-active transition-all' : 'pb-2 hover:text-white transition-all';
             renderHistory();
-        }
+        };
 
-        function startEdit(id) {
-            const dossier = history.find(i => i.id === id);
+        window.startEdit = (id) => {
+            const dossier = historyData.find(i => i.id === id);
             if(!dossier) return;
             editingDossierId = id;
             document.getElementById('carrier').value = dossier.carrier;
@@ -467,9 +580,9 @@
             submitBtn.innerText = "Mettre à jour";
             cancelBtn.classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        };
 
-        function resetForm() {
+        window.resetForm = () => {
             editingDossierId = null;
             form.reset();
             tempImages = [];
@@ -478,14 +591,16 @@
             submitBtn.innerText = "Enregistrer";
             cancelBtn.classList.add('hidden');
             updateCalculations();
-        }
+        };
 
-        form.addEventListener('submit', (e) => {
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            if(!currentUser) return;
+            
             const calcs = updateCalculations();
+            const dossierId = editingDossierId || "LBV-" + Date.now().toString(36).toUpperCase();
+            
             const dossierData = {
-                id: editingDossierId || "LBV-" + Date.now().toString(36).toUpperCase(),
-                date: editingDossierId ? history.find(i=>i.id===editingDossierId).date : new Date().toLocaleDateString('fr-FR'),
                 carrier: document.getElementById('carrier').value,
                 bl: document.getElementById('blNumber').value,
                 container: document.getElementById('containerNumber').value,
@@ -498,76 +613,76 @@
                 totalCost: calcs.totalCost,
                 images: [...tempImages],
                 dims: calcs.dims,
-                finance: { buy: calcs.buy, ship: calcs.ship, other: calcs.other, sell: calcs.sell }
+                finance: { buy: calcs.buy, ship: calcs.ship, other: calcs.other, sell: calcs.sell },
+                updatedAt: new Date().getTime()
             };
 
-            if (editingDossierId) {
-                const idx = history.findIndex(i => i.id === editingDossierId);
-                history[idx] = dossierData;
-            } else {
-                history.unshift(dossierData);
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'active', dossierId);
+                await setDoc(docRef, dossierData, { merge: true });
+                resetForm();
+            } catch (err) {
+                console.error("Save error", err);
             }
-            saveAll();
-            renderHistory();
-            resetForm();
         });
 
-        // Gallery
-        function openGallery(images, startIdx = 0) {
+        window.openGallery = (imagesJsonStr) => {
+            const images = JSON.parse(decodeURIComponent(imagesJsonStr));
             if (!images || images.length === 0) return;
             currentGallery = images; 
-            currentImgIdx = startIdx; 
+            currentImgIdx = 0; 
             updateGalleryUI();
             document.getElementById('galleryModal').classList.remove('hidden');
-        }
-        function closeGallery() { document.getElementById('galleryModal').classList.add('hidden'); }
+        };
+
+        window.closeGallery = () => { document.getElementById('galleryModal').classList.add('hidden'); };
+        
         function updateGalleryUI() {
             document.getElementById('modalImg').src = currentGallery[currentImgIdx];
             document.getElementById('imgCounter').innerText = `Document ${currentImgIdx + 1} / ${currentGallery.length}`;
         }
-        function nextImg() { currentImgIdx = (currentImgIdx + 1) % currentGallery.length; updateGalleryUI(); }
-        function prevImg() { currentImgIdx = (currentImgIdx - 1 + currentGallery.length) % currentGallery.length; updateGalleryUI(); }
+        
+        window.nextImg = () => { currentImgIdx = (currentImgIdx + 1) % currentGallery.length; updateGalleryUI(); };
+        window.prevImg = () => { currentImgIdx = (currentImgIdx - 1 + currentGallery.length) % currentGallery.length; updateGalleryUI(); };
 
-        function moveTask(id, toArchive) {
-            if(toArchive) {
-                const item = history.find(i => i.id === id);
-                archives.unshift(item); history = history.filter(i => i.id !== id);
-            } else {
-                const item = archives.find(i => i.id === id);
-                history.unshift(item); archives = archives.filter(i => i.id !== id);
+        window.moveTask = async (id, toArchive) => {
+            if(!currentUser) return;
+            const fromCol = toArchive ? 'active' : 'archive';
+            const toCol = toArchive ? 'archive' : 'active';
+            
+            const sourceDoc = doc(db, 'artifacts', appId, 'users', currentUser.uid, fromCol, id);
+            const destDoc = doc(db, 'artifacts', appId, 'users', currentUser.uid, toCol, id);
+            
+            const snap = await getDoc(sourceDoc);
+            if (snap.exists()) {
+                await setDoc(destDoc, snap.data());
+                await deleteDoc(sourceDoc);
             }
-            saveAll(); renderHistory();
-        }
+        };
 
-        function deleteItem(id) {
-            if(!confirm("Supprimer ce dossier ?")) return;
-            if(currentTab === 'active') history = history.filter(i => i.id !== id);
-            else archives = archives.filter(i => i.id !== id);
-            saveAll(); renderHistory();
-        }
+        window.deleteItem = async (id) => {
+            if(!currentUser || !confirm("Supprimer définitivement ce dossier ?")) return;
+            const col = currentTab === 'active' ? 'active' : 'archive';
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, col, id));
+        };
 
-        function saveAll() {
-            localStorage.setItem('logi_active_v9', JSON.stringify(history));
-            localStorage.setItem('logi_archive_v9', JSON.stringify(archives));
-            updateDashboard();
-        }
-
-        function filterHistory() { renderHistory(searchInput.value.toLowerCase()); }
+        window.filterHistory = () => { renderHistory(searchInput.value.toLowerCase()); };
 
         function renderHistory(filter = "") {
-            const list = currentTab === 'active' ? history : archives;
+            const list = currentTab === 'active' ? historyData : archivesData;
             const body = document.getElementById('historyBody');
             const noRes = document.getElementById('noResult');
-            const filtered = list.filter(item => item.client.toLowerCase().includes(filter) || item.bl.toLowerCase().includes(filter));
+            
+            const filtered = list
+                .filter(item => item.client.toLowerCase().includes(filter) || item.bl.toLowerCase().includes(filter))
+                .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
             noRes.classList.toggle('hidden', filtered.length > 0);
             body.innerHTML = filtered.map(item => {
                 const statusColor = item.margin < 0 ? 'bg-red-100 text-red-700 border-red-200' : (item.marginPerc < 10 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-green-100 text-green-700 border-green-200');
                 const statusLabel = item.margin < 0 ? 'Déficit' : (item.marginPerc < 10 ? 'Marge Faible' : 'Rentable');
                 const hasImages = item.images && item.images.length > 0;
-                
-                // On prépare les données JSON pour l'appel de galerie
-                const imagesJson = JSON.stringify(item.images || []).replace(/"/g, '&quot;');
+                const imagesJsonEncoded = encodeURIComponent(JSON.stringify(item.images || []));
 
                 return `
                 <tr class="hover:bg-gray-50 border-b group transition-colors">
@@ -580,7 +695,7 @@
                         <div class="font-medium text-gray-800">${item.name}</div>
                         <div class="flex items-center gap-2 mt-1">
                             <span class="text-blue-700 font-bold text-[10px] bg-blue-50 px-1 rounded inline-block">${item.cbm} m³</span>
-                            ${hasImages ? `<button onclick="openGallery(${imagesJson})" class="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:bg-blue-700" title="Voir les documents">📷 ${item.images.length}</button>` : ''}
+                            ${hasImages ? `<button onclick="openGallery('${imagesJsonEncoded}')" class="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:bg-blue-700">📷 ${item.images.length}</button>` : ''}
                         </div>
                     </td>
                     <td class="p-4">
@@ -589,7 +704,6 @@
                     </td>
                     <td class="p-4">
                         <span class="px-2 py-1 rounded-full text-[9px] font-black border uppercase ${statusColor}">${statusLabel}</span>
-                        <div class="text-[9px] mt-1 text-gray-400">Rentabilité: ${item.marginPerc ? item.marginPerc.toFixed(1) : 0}%</div>
                     </td>
                     <td class="p-4">
                         <div class="flex flex-col text-[10px]">
@@ -610,7 +724,6 @@
         }
 
         updateCalculations();
-        renderHistory();
     </script>
 </body>
 </html>
