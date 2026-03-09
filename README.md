@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Logi-Gabon | Gestionnaire de Fret Expert</title>
+    <title>Logis-Gabon | Gestionnaire de Fret Expert</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
