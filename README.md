@@ -73,7 +73,7 @@
         <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-center mb-8 bg-green-800 p-6 rounded-xl text-white shadow-lg">
             <div>
-                <h1 class="text-3xl font-bold italic tracking-tighter uppercase">Logi-Gabon</h1>
+                <h1 class="text-3xl font-bold italic tracking-tighter uppercase">Logis-Gabon</h1>
                 <p class="opacity-90 text-sm font-medium">Gestion Transit & Suivi des Dépenses - Libreville / Owendo</p>
             </div>
             <div id="clock" class="text-lg font-mono mt-4 md:mt-0 bg-green-900 px-4 py-1 rounded-full"></div>
