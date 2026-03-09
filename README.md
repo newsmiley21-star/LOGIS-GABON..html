@@ -161,7 +161,7 @@
                                 <input type="number" id="larg" required oninput="updateCalculations()" class="w-full p-2 border rounded">
                             </div>
                             <div>
-                                <label class="text-[10px] font-bold text-gray-500 uppercase">Haut (cm)</label>
+                                <label class="text-[10px] font-bold text-gray-500 uppercase">Haut (cm) <span class="text-blue-500 cursor-help" title="Calcul automatique du volume en m³">🛈</span></label>
                                 <input type="number" id="haut" required oninput="updateCalculations()" class="w-full p-2 border rounded">
                             </div>
                         </div>
@@ -217,6 +217,18 @@
                         </div>
                     </div>
                 </form>
+
+                <!-- Rappels Experts Owendo (Conseil Gemini) -->
+                <div class="mt-6 p-3 bg-blue-50 border-l-4 border-blue-500 rounded text-[11px] text-blue-800">
+                    <p class="font-bold uppercase mb-1 flex items-center">
+                        <span class="mr-1">💡</span> Memo Expert Transit Gabon
+                    </p>
+                    <ul class="list-disc list-inside space-y-1 opacity-90">
+                        <li><strong>Incoterm :</strong> Assurez-vous d'ajouter l'assurance (~2%) si achat FOB pour la base Douane.</li>
+                        <li><strong>Owendo :</strong> Prévoir une marge pour le magasinage si le navire dépasse 5 jours à quai.</li>
+                        <li><strong>Documents :</strong> Toujours scanner la copie du BL et la facture fournisseur avant livraison.</li>
+                    </ul>
+                </div>
             </section>
 
             <!-- Résumé Rapide & Alertes Comptables -->
@@ -237,13 +249,16 @@
                             <p class="text-[10px] font-black text-gray-400 uppercase mb-2">Décompte des Dépenses</p>
                             <div class="expense-row"><span>Achat Marchandise</span><span id="resBuy">0 FCFA</span></div>
                             <div class="expense-row"><span>Fret Maritime/Aérien</span><span id="resShip">0 FCFA</span></div>
-                            <div class="expense-row text-red-500"><span>Douane Estimée (45%)</span><span id="resTax" class="font-bold">0 FCFA</span></div>
+                            <div class="expense-row text-red-500">
+                                <span title="Moyenne Gabon : Droit de Douane + TVA + Taxes Communautaires">Douane Estimée (45%) ℹ️</span>
+                                <span id="resTax" class="font-bold">0 FCFA</span>
+                            </div>
                             <div class="expense-row"><span>Logistique / Port</span><span id="resOther">0 FCFA</span></div>
                             <div class="expense-row text-green-700 font-bold"><span>Frais Dossier Fixes</span><span>65 000 FCFA</span></div>
                         </div>
 
                         <div class="flex justify-between font-black pt-2 border-t border-gray-300 uppercase text-[11px] text-gray-700">
-                            <span>Coût de revient total</span>
+                            <span title="Inclus une marge de sécurité de 5% pour imprévus">Coût de revient total 🛡️</span>
                             <span id="resTotalCost">0 FCFA</span>
                         </div>
 
@@ -344,7 +359,12 @@
             const cbm = (l * w * h) / 1000000;
             const caf = buy + ship;
             const tax = caf * 0.45;
-            const totalCost = caf + tax + other + DOSSIER_FEE;
+            
+            // CONSEIL : Ajout d'une marge de sécurité de 5% sur les coûts totaux (Owendo Risk)
+            const rawTotalCost = caf + tax + other + DOSSIER_FEE;
+            const securityBuffer = rawTotalCost * 0.05; 
+            const totalCost = rawTotalCost + securityBuffer;
+
             const margin = sell - totalCost;
             const marginPerc = sell > 0 ? (margin / sell) * 100 : 0;
 
@@ -388,14 +408,13 @@
                     alertBadge.innerText = "SANTÉ : Excellente";
                     alertBadge.className = "px-2 py-1 rounded text-[10px] font-black uppercase bg-green-600 text-white";
                     alertBadge.classList.remove('hidden');
-                    adviceBox.innerHTML = `✅ <strong>Analyse :</strong> Ce dossier est sain. Rentabilité confirmée.`;
+                    adviceBox.innerHTML = `✅ <strong>Analyse :</strong> Ce dossier est sain. Rentabilité confirmée incluant une sécurité logistique.`;
                 }
             }
             
             return { cbm, tax, totalCost, margin, marginPerc, buy, ship, other, sell, dims: {l, w, h} };
         }
 
-        // Dashboard Stats
         function updateDashboard() {
             const list = [...history, ...archives];
             const totalCA = list.reduce((sum, item) => sum + (item.finance?.sell || 0), 0);
@@ -512,7 +531,6 @@
             resetForm();
         });
 
-        // Gallery
         function openGallery(images, startIdx = 0) {
             if (!images || images.length === 0) return;
             currentGallery = images; 
@@ -558,59 +576,59 @@
             const list = currentTab === 'active' ? history : archives;
             const body = document.getElementById('historyBody');
             const noRes = document.getElementById('noResult');
-            const filtered = list.filter(item => item.client.toLowerCase().includes(filter) || item.bl.toLowerCase().includes(filter));
+            const filtered = list.filter(item => 
+                item.client.toLowerCase().includes(filter) || 
+                item.bl.toLowerCase().includes(filter) || 
+                item.name.toLowerCase().includes(filter)
+            );
 
             noRes.classList.toggle('hidden', filtered.length > 0);
             body.innerHTML = filtered.map(item => {
                 const statusColor = item.margin < 0 ? 'bg-red-100 text-red-700 border-red-200' : (item.marginPerc < 10 ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-green-100 text-green-700 border-green-200');
                 const statusLabel = item.margin < 0 ? 'Déficit' : (item.marginPerc < 10 ? 'Marge Faible' : 'Rentable');
                 const hasImages = item.images && item.images.length > 0;
-                
-                // On prépare les données JSON pour l'appel de galerie
                 const imagesJson = JSON.stringify(item.images || []).replace(/"/g, '&quot;');
 
                 return `
-                <tr class="hover:bg-gray-50 border-b group transition-colors">
-                    <td class="p-4">
-                        <div class="text-green-700 font-black uppercase text-[9px]">${item.carrier}</div>
-                        <div class="text-gray-900 font-mono text-[11px] font-bold">${item.bl}</div>
-                        <div class="text-[9px] text-gray-400">ID: ${item.id}</div>
-                    </td>
-                    <td class="p-4">
-                        <div class="font-medium text-gray-800">${item.name}</div>
-                        <div class="flex items-center gap-2 mt-1">
-                            <span class="text-blue-700 font-bold text-[10px] bg-blue-50 px-1 rounded inline-block">${item.cbm} m³</span>
-                            ${hasImages ? `<button onclick="openGallery(${imagesJson})" class="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded shadow-sm hover:bg-blue-700" title="Voir les documents">📷 ${item.images.length}</button>` : ''}
-                        </div>
-                    </td>
-                    <td class="p-4">
-                        <div class="font-bold text-gray-800">${item.client}</div>
-                        <div class="text-[10px] text-gray-400">${item.phone}</div>
-                    </td>
-                    <td class="p-4">
-                        <span class="px-2 py-1 rounded-full text-[9px] font-black border uppercase ${statusColor}">${statusLabel}</span>
-                        <div class="text-[9px] mt-1 text-gray-400">Rentabilité: ${item.marginPerc ? item.marginPerc.toFixed(1) : 0}%</div>
-                    </td>
-                    <td class="p-4">
-                        <div class="flex flex-col text-[10px]">
-                            <span class="text-gray-400">Vente: ${formatFCFA(item.finance.sell)}</span>
-                            <span class="font-black ${item.margin > 0 ? 'text-green-600' : 'text-red-600'} text-xs">Net: ${formatFCFA(item.margin)}</span>
-                        </div>
-                    </td>
-                    <td class="p-4 text-right">
-                        <div class="flex justify-end space-x-1 opacity-0 group-hover:opacity-100">
-                            ${currentTab === 'active' ? `<button onclick="startEdit('${item.id}')" class="p-2 bg-orange-50 text-orange-600 rounded">✏️</button>` : ''}
-                            <button onclick="moveTask('${item.id}', ${currentTab === 'active'})" class="p-2 bg-blue-50 text-blue-600 rounded">${currentTab === 'active' ? '📥' : '📤'}</button>
-                            <button onclick="deleteItem('${item.id}')" class="p-2 bg-red-50 text-red-500 rounded">🗑️</button>
-                        </div>
-                    </td>
-                </tr>`;
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="p-4">
+                            <div class="font-black text-gray-800">${item.carrier}</div>
+                            <div class="text-[10px] text-gray-400">BL: ${item.bl}</div>
+                            <div class="text-[10px] text-gray-400">ID: ${item.id}</div>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-bold">${item.name}</div>
+                            <div class="text-[10px] text-blue-600 font-mono">${item.cbm} m³</div>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-bold">${item.client}</div>
+                            <div class="text-[10px] text-gray-500">${item.phone}</div>
+                        </td>
+                        <td class="p-4">
+                            <span class="px-2 py-1 rounded-full text-[9px] font-black uppercase border ${statusColor}">${statusLabel}</span>
+                        </td>
+                        <td class="p-4">
+                            <div class="font-black">${formatFCFA(item.finance.sell)}</div>
+                            <div class="text-[9px] ${item.margin >= 0 ? 'text-green-600' : 'text-red-500'}">Marge: ${formatFCFA(item.margin)}</div>
+                        </td>
+                        <td class="p-4 text-right space-x-1">
+                            ${hasImages ? `<button onclick="openGallery(${imagesJson})" class="p-2 bg-blue-100 text-blue-600 rounded hover:bg-blue-200" title="Voir les documents">🖼️</button>` : ''}
+                            <button onclick="startEdit('${item.id}')" class="p-2 bg-gray-100 text-gray-600 rounded hover:bg-gray-200">✏️</button>
+                            <button onclick="moveTask('${item.id}', ${currentTab === 'active'})" class="p-2 ${currentTab === 'active' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'} rounded hover:opacity-80">
+                                ${currentTab === 'active' ? '✅' : '🔄'}
+                            </button>
+                            <button onclick="deleteItem('${item.id}')" class="p-2 bg-red-100 text-red-600 rounded hover:bg-red-200">🗑️</button>
+                        </td>
+                    </tr>
+                `;
             }).join('');
-            updateDashboard();
         }
 
-        updateCalculations();
-        renderHistory();
+        // Init
+        window.onload = () => {
+            updateDashboard();
+            renderHistory();
+        };
     </script>
 </body>
 </html>
