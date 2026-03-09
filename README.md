@@ -345,7 +345,7 @@
     <script>
         // --- LOGIQUE DE VERROUILLAGE ---
         let currentPin = "";
-        const MASTER_PIN = "SMILEYLEGOAT2002";
+        const MASTER_PIN = "12901564";
 
         function pressPin(num) {
             if (currentPin.length < 4) {
